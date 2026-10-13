@@ -10,7 +10,6 @@ import {
   startOfDay,
 } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface StatisticsProps {
   entries: JournalEntry[];
@@ -122,6 +121,11 @@ export default function Statistics({ entries }: StatisticsProps) {
     );
   }
 
+  const maxMoodValue = Math.max(...stats.moodCounts.map(m => m.value), 1);
+  const max7Day = Math.max(...stats.last7Days.map(d => d.count), 1);
+  const max30Day = Math.max(...stats.last30Days.map(d => d.count), 1);
+  const totalMoodValue = stats.moodCounts.reduce((sum, m) => sum + m.value, 0);
+
   return (
     <div className="space-y-4">
       {/* Stats Cards */}
@@ -169,7 +173,7 @@ export default function Statistics({ entries }: StatisticsProps) {
 
       {/* Charts */}
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Mood Distribution */}
+        {/* Mood Distribution - Donut Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -177,32 +181,41 @@ export default function Statistics({ entries }: StatisticsProps) {
           className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
         >
           <h3 className="font-semibold text-gray-800 mb-4">Distribusi Mood</h3>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stats.moodCounts.filter(m => m.value > 0)}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={70}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {stats.moodCounts.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, name: string) => [`${value} entri`, name]}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex items-center justify-center">
+            <div className="relative w-40 h-40">
+              <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                {(() => {
+                  let cumulativePercent = 0;
+                  return stats.moodCounts.filter(m => m.value > 0).map((m, i) => {
+                    const percent = (m.value / totalMoodValue) * 100;
+                    const dashArray = `${percent} ${100 - percent}`;
+                    const dashOffset = -cumulativePercent;
+                    cumulativePercent += percent;
+                    return (
+                      <circle
+                        key={i}
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        fill="none"
+                        stroke={m.color}
+                        strokeWidth="12"
+                        strokeDasharray={dashArray}
+                        strokeDashoffset={dashOffset}
+                        className="transition-all duration-500"
+                      />
+                    );
+                  });
+                })()}
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl">{stats.mostCommonMood.emoji}</span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-3 mt-4 justify-center">
             {stats.moodCounts.filter(m => m.value > 0).map(m => (
-              <span key={m.name} className="flex items-center gap-1 text-xs text-gray-600">
+              <span key={m.name} className="flex items-center gap-1.5 text-xs text-gray-600">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: m.color }}></span>
                 {m.emoji} {m.name} ({m.value})
               </span>
@@ -218,18 +231,21 @@ export default function Statistics({ entries }: StatisticsProps) {
           className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
         >
           <h3 className="font-semibold text-gray-800 mb-4">Aktivitas 7 Hari Terakhir</h3>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.last7Days}>
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb' }}
-                  formatter={(value: number) => [`${value} entri`, 'Jurnal']}
-                />
-                <Bar dataKey="count" fill="#6366f1" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex items-end gap-2 h-40 px-2">
+            {stats.last7Days.map((d, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-xs font-medium text-gray-600">{d.count}</span>
+                <div className="w-full bg-gray-100 rounded-t-lg relative" style={{ height: '100%' }}>
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: `${(d.count / max7Day) * 100}%` }}
+                    transition={{ delay: 0.3 + i * 0.05, duration: 0.5 }}
+                    className="absolute bottom-0 w-full bg-gradient-to-t from-indigo-500 to-purple-500 rounded-t-lg"
+                  />
+                </div>
+                <span className="text-xs text-gray-500 capitalize">{d.day}</span>
+              </div>
+            ))}
           </div>
         </motion.div>
       </div>
@@ -242,18 +258,24 @@ export default function Statistics({ entries }: StatisticsProps) {
         className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
       >
         <h3 className="font-semibold text-gray-800 mb-4">Aktivitas 30 Hari Terakhir</h3>
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={stats.last30Days}>
-              <XAxis dataKey="day" tick={{ fontSize: 10 }} interval={4} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb' }}
-                formatter={(value: number) => [`${value} entri`, 'Jurnal']}
-              />
-              <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="flex items-end gap-0.5 h-32 px-1">
+          {stats.last30Days.map((d, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center">
+              <div className="w-full bg-gray-100 rounded-t relative" style={{ height: '100%' }}>
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: d.count > 0 ? `${Math.max((d.count / max30Day) * 100, 10)}%` : '2%' }}
+                  transition={{ delay: 0.4 + i * 0.02, duration: 0.3 }}
+                  className={`absolute bottom-0 w-full rounded-t ${
+                    d.count > 0 ? 'bg-gradient-to-t from-violet-500 to-purple-400' : 'bg-gray-200'
+                  }`}
+                />
+              </div>
+              {i % 5 === 0 && (
+                <span className="text-[9px] text-gray-400 mt-1">{d.day}</span>
+              )}
+            </div>
+          ))}
         </div>
       </motion.div>
 
@@ -268,18 +290,20 @@ export default function Statistics({ entries }: StatisticsProps) {
             className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
           >
             <h3 className="font-semibold text-gray-800 mb-3">🏷️ Tag Terpopuler</h3>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {stats.topTags.map(([tag, count]) => (
                 <div key={tag} className="flex items-center justify-between">
                   <span className="text-sm text-gray-700">#{tag}</span>
                   <div className="flex items-center gap-2">
                     <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(count / stats.totalEntries) * 100}%` }}
+                        transition={{ delay: 0.6, duration: 0.5 }}
                         className="h-full bg-indigo-500 rounded-full"
-                        style={{ width: `${(count / stats.totalEntries) * 100}%` }}
                       />
                     </div>
-                    <span className="text-xs text-gray-500">{count}</span>
+                    <span className="text-xs text-gray-500 w-6 text-right">{count}</span>
                   </div>
                 </div>
               ))}
